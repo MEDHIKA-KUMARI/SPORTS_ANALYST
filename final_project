@@ -1,0 +1,172 @@
+/*Creating table matches containing the description of the matches held
+over the time period of 2008 to 2020*/
+
+create table matches(
+id int primary key,
+city character varying(255),
+date date,
+player_of_match character varying(255),
+venue character varying(255),
+neutral_venue int,
+team1 character varying(255),
+team2 character varying(255),
+toss_winner character varying(255),
+toss_decision character varying(255),
+winner character varying(255),
+result character varying(255),
+result_margin int,
+eliminator character varying(255),
+method character varying(255),
+umpire1 character varying(255),
+umpire2 character varying(255)
+);
+--table matches created
+
+select * from matches; -- to get the view of the matches
+
+/* creating table deliveries containing the ball data of the matches
+held between 2008 to 2020*/
+
+create table deliveries(
+id int,
+inning int,
+over int,
+ball int,
+batsman character varying(255),
+non_striker character varying(255),
+bowler character varying(255),
+batsman_runs int,
+extra_runs int,
+total_runs int,
+is_wicket int,
+dismissal_kind character varying(255),
+player_dismissed character varying(255),
+fielder character varying(255),
+extras_type character varying(255),
+batting_team character varying(255),
+bowling_team character varying(255)
+);
+-- table deliveries created
+
+select * from deliveries; -- to get the view of the table
+
+--IMPORTING DATA
+
+--csv file named ipl_matches1 to matches table
+copy matches from 'C:\Program Files\PostgreSQL\13\copy data\ipl_matches1.csv' delimiter ',' csv header;
+select * from matches; --checks the imported rows 
+
+--csv file named ipl_ball1 to deliveries table
+copy deliveries from 'C:\Program Files\PostgreSQL\13\copy data\ipl_ball1.csv' delimiter ',' csv header;
+select * from deliveries; --checks the imported rows
+
+--top 20 rows of deliveries and matches
+select * from deliveries limit 20;
+select * from matches limit 20;
+
+--data of matches played on 2nd May, 1013
+select * from matches where date= '02-05-2013';
+
+--data of all matches where margin of victory is more than 100 runs.
+select * from matches where result_margin>100 order by result_margin desc;
+
+--data of all matches where the final scores of both teams tied
+-- ordered in descending order
+select * from matches where eliminator= 'Y' order by date desc;
+
+--count of cities hosting an IPL match and there names
+select count( distinct city) as count_of_city from matches;
+select distinct city from matches where order by city;
+
+/* creating table deliveries_v02 with all columns of deliveries and an 
+additional column ball_result containing value boundary, dot or 
+other dependency on the total_run*/
+create table deliveries_v02 as select *, 
+case when total_runs>=4 then 'boundary'
+when total_runs= 0 then 'dot'
+else 'other'
+end as ball_result
+from deliveries;
+--table created
+
+select * from deliveries_v02; --view of table
+
+-- to fetch total number of boundaries and dot balls
+select count(ball_result) as total_boundaries from deliveries_v02 where ball_result = 'boundary';
+select count(ball_result) as total_dot_balls from deliveries_v02 where ball_result = 'dot';
+
+--total number of boundaries scored by each team
+select batting_team, count(ball_result) as total_scored_boundaries from deliveries_v02
+where ball_result= 'boundary' group by batting_team order by total_scored_boundaries desc;
+
+--total number of dot balls bowled by each team
+select bowling_team, count(ball_result) as total_dot_bowled from deliveries_v02
+where ball_result= 'dot' group by bowling_team;
+
+--total number of dismissals on the basis of dismissal kind
+select dismissal_kind, count(player_dismissed) as total_dismissal from deliveries group by dismissal_kind;
+
+--top 5 bowlers who conceded maximum extra runs
+select bowler, extra_runs from deliveries order by extra_runs desc limit 5;
+
+/*creating table named deliveries_v03 with all thje columns of deliveries_v02
+and two additional columns named venue and match_date  of venue and date 
+from table matches*/
+create table deliveries_v03 as select deliveries_v02.*,
+matches.venue,
+matches.date as match_date 
+from deliveries_v02 right join matches
+on deliveries_v02.id= matches.id;
+--table created
+select * from deliveries_v03; --view of the table
+
+--total runs scored for each venue ordered in descending order of total_runs scored
+select venue, sum(total_runs) as total_runs 
+from deliveries_v03 group by venue order by total_runs desc;
+
+/*to fetch the year-wise total runs scored at Eden Gardens 
+ordered in descending order of total_runs scored*/
+select extract(year from match_date) as IPL_year, sum(total_runs) as runs 
+from deliveries_v03 where venue = 'Eden Gardens' 
+group by IPL_year order by runs desc;
+
+--to get unique team1 names from matches
+select distinct team1 from matches;
+
+/* creating matches_corrected table with two additional columns team1_corr and team2_corr 
+containing team names with replacing Rising Pune Supergiants with Rising Pune Supergiants*/
+create table matches_corrected as 
+select *, replace(team1, 'Rising Pune Supergiants', 'Rising Pune Supergiant') 
+as team1_corr, 
+replace(team2, 'Rising Pune Supergiants', 'Rising Pune Supergiant')
+as team2_corr from matches;
+--table created
+
+--analysing the table matches_corrected
+select distinct team1_corr from matches_corrected;
+
+/*creating table deliveries_v04 with the first column as ball_id containing
+information of match_id, inning, over and ball separated by '-'*/
+create table deliveries_v04 as select concat(id,'-',inning,'-',over,'-',ball) 
+as ball_id, * from deliveries_v03;
+--table created
+
+--comparing the total count of rows and total count of distinct ball_id in deliveries_v04
+select count(*) as count_of_rows from deliveries_v04;
+select count( distinct ball_id) as distinct_ball_id from deliveries_v04;
+
+/*creating table deliveries_v05 with all the columns of deliveries_v04 
+and an additional column for row number partition over ball_id*/
+create table deliveries_v05 as select *, row_number() 
+over (partition by ball_id) as r_num from deliveries_v04;
+
+-- using r_num to identify instances where ball_id is repeating
+select * from deliveries_v05 WHERE r_num=2;
+
+--to fetch data of all the ball_id which are repeating
+select * FROM deliveries_v05 WHERE ball_id in (select BALL_ID from deliveries_v05 WHERE r_num=2);
+
+-- END OF THE PROJECT
+
+
+
